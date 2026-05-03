@@ -1,0 +1,16 @@
+apiVersion: v2
+name: app-platform
+description: Production-grade Helm chart for deploying microservices on EKS
+type: application
+version: 1.2.0
+appVersion: "1.0.0"
+
+keywords:
+  - microservice
+  - kubernetes
+  - eks
+  - production
+
+maintainers:
+  - name: Platform Team
+    email: platform@your-company.com

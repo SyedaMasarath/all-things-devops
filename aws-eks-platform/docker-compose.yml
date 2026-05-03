@@ -1,0 +1,65 @@
+################################################################################
+# docker-compose.yml — Local Development
+#
+# Runs the full stack locally without any AWS infrastructure.
+# Usage:
+#   docker compose up --build          # build and start everything
+#   docker compose up --build api      # rebuild only the API
+#   docker compose logs -f api         # tail API logs
+#   docker compose down                # stop and remove containers
+#
+# Access:
+#   Frontend dashboard  → http://localhost:3000
+#   API status          → http://localhost:8080/api/v1/status
+#   Prometheus metrics  → http://localhost:8080/metrics
+#   Liveness probe      → http://localhost:8080/health/live
+#   Readiness probe     → http://localhost:8080/health/ready
+################################################################################
+
+services:
+
+  # ── API Service (Go) ────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+      args:
+        VERSION: local-dev
+        GIT_COMMIT: local
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+    image: eks-platform/api-service:local
+    container_name: api-service
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      ENVIRONMENT: "local"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - platform
+
+  # ── Frontend (nginx) ────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: eks-platform/frontend:local
+    container_name: frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - platform
+
+networks:
+  platform:
+    driver: bridge

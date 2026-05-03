@@ -1,0 +1,27 @@
+# Frontend values for dev environment
+global:
+  environment: dev
+
+replicaCount: 1
+
+ingress:
+  hosts:
+    - host: dev-frontend.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
+
+autoscaling:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: "100%"

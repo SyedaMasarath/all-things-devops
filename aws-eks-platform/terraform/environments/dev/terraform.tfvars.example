@@ -1,0 +1,28 @@
+################################################################################
+# Development Environment — terraform.tfvars.example
+#
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored — never commit real values.
+#
+# Usage:
+#   cp terraform.tfvars.example terraform.tfvars
+#   terraform plan -var-file=terraform.tfvars
+################################################################################
+
+# AWS region to deploy into
+# Dev can be in a different region from prod to isolate blast radius
+aws_region = "us-east-1"
+
+# CIDRs allowed to reach the EKS public API endpoint
+# Dev is less critical than prod, but still avoid 0.0.0.0/0.
+# Use your VPN range or developer office IP(s).
+#
+# Run: curl -s ifconfig.me    ← to get your current public IP
+allowed_cidr_blocks = ["10.8.0.0/16"]
+
+# ECR repositories to create in this environment
+# Usually mirrors prod — both envs push to the same repos, tagged by environment
+ecr_repositories = [
+  "api-service",
+  "frontend",
+]

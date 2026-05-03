@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EKS Platform — Status Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --green:     #3fb950;
+      --green-dim: #1a3a22;
+      --blue:      #58a6ff;
+      --yellow:    #d29922;
+      --red:       #f85149;
+      --purple:    #bc8cff;
+      --radius:    12px;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 2rem 1rem;
+    }
+
+    .container { max-width: 900px; margin: 0 auto; }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 2.5rem;
+    }
+    .logo {
+      width: 44px; height: 44px;
+      background: linear-gradient(135deg, #1f6feb, #388bfd);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.4rem;
+    }
+    header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; }
+    header p  { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
+
+    .status-pill {
+      margin-left: auto;
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 0.8rem; font-weight: 600;
+      background: var(--green-dim);
+      color: var(--green);
+      border: 1px solid #238636;
+      transition: all 0.3s;
+    }
+    .status-pill.loading { background: #1a1e26; color: var(--muted); border-color: var(--border); }
+    .status-pill.error   { background: #2d1a1a; color: var(--red);   border-color: #6e2626; }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+
+    /* ── Grid ── */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .card:hover { border-color: #58a6ff55; transform: translateY(-1px); }
+
+    .card-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+    .card-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text);
+      word-break: break-all;
+    }
+    .card-value.highlight { color: var(--blue); }
+    .card-value.green     { color: var(--green); }
+    .card-value.purple    { color: var(--purple); }
+
+    /* ── Metrics bar ── */
+    .metrics-section { margin-top: 1.5rem; }
+    .metrics-section h2 {
+      font-size: 0.9rem; font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 1rem;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .metrics-section h2::after {
+      content: '';
+      flex: 1; height: 1px;
+      background: var(--border);
+    }
+
+    .metric-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.65rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.88rem;
+    }
+    .metric-row:last-child { border-bottom: none; }
+    .metric-name { color: var(--muted); }
+    .metric-val  { font-family: 'JetBrains Mono', monospace; font-weight: 600; color: var(--text); }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: 2.5rem;
+      text-align: center;
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+    footer a { color: var(--blue); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    .refresh-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-left: auto;
+      display: block;
+      margin-bottom: 1rem;
+    }
+    .refresh-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+    .skeleton {
+      background: linear-gradient(90deg, var(--border) 25%, #3d444d 50%, var(--border) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px;
+      height: 1.1rem;
+      width: 80%;
+    }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    .last-updated {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-align: right;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">⚙️</div>
+      <div>
+        <h1>EKS Platform</h1>
+        <p>Production Status Dashboard</p>
+      </div>
+      <div class="status-pill loading" id="status-pill">
+        <span class="dot"></span>
+        <span id="status-text">Connecting…</span>
+      </div>
+    </header>
+
+    <button class="refresh-btn" onclick="fetchStatus()">↻ Refresh</button>
+
+    <div class="grid" id="cards">
+      <!-- Populated by JS -->
+      <div class="card"><div class="card-label">Version</div><div class="skeleton"></div></div>
+      <div class="card"><div class="card-label">Environment</div><div class="skeleton"></div></div>
+      <div class="card"><div class="card-label">Uptime</div><div class="skeleton"></div></div>
+      <div class="card"><div class="card-label">Git Commit</div><div class="skeleton"></div></div>
+      <div class="card"><div class="card-label">Go Version</div><div class="skeleton"></div></div>
+      <div class="card"><div class="card-label">Architecture</div><div class="skeleton"></div></div>
+    </div>
+
+    <div class="metrics-section">
+      <h2>API Metrics</h2>
+      <div id="metrics-rows">
+        <div class="metric-row"><span class="metric-name">Total Requests</span><div class="skeleton" style="width:60px"></div></div>
+        <div class="metric-row"><span class="metric-name">Build Date</span><div class="skeleton" style="width:100px"></div></div>
+      </div>
+    </div>
+
+    <p class="last-updated" id="last-updated"></p>
+
+    <footer>
+      AWS EKS Platform &middot;
+      <a href="/api/v1/status" target="_blank">Raw API</a> &middot;
+      <a href="/health" target="_blank">Health</a> &middot;
+      Built with Go + nginx + Kubernetes
+    </footer>
+  </div>
+
+  <script>
+    async function fetchStatus() {
+      const pill     = document.getElementById('status-pill');
+      const pillText = document.getElementById('status-text');
+
+      pill.className = 'status-pill loading';
+      pillText.textContent = 'Connecting…';
+
+      try {
+        const res  = await fetch('/api/v1/status');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        // Update status pill
+        pill.className  = 'status-pill';
+        pillText.textContent = 'All Systems Operational';
+
+        // Render cards
+        document.getElementById('cards').innerHTML = `
+          <div class="card">
+            <div class="card-label">Version</div>
+            <div class="card-value highlight">${data.version || 'dev'}</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Environment</div>
+            <div class="card-value purple">${data.environment || '—'}</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Uptime</div>
+            <div class="card-value green">${data.uptime || '—'}</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Git Commit</div>
+            <div class="card-value">${(data.git_commit || 'none').slice(0,12)}</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Go Version</div>
+            <div class="card-value">${data.go_version || '—'}</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Architecture</div>
+            <div class="card-value">${data.goos || ''}/${data.goarch || ''}</div>
+          </div>
+        `;
+
+        // Render metrics
+        document.getElementById('metrics-rows').innerHTML = `
+          <div class="metric-row">
+            <span class="metric-name">Total API Requests</span>
+            <span class="metric-val">${(data.requests || 0).toLocaleString()}</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-name">Build Date</span>
+            <span class="metric-val">${data.build_date || 'unknown'}</span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-name">API Status</span>
+            <span class="metric-val" style="color:var(--green)">${data.status}</span>
+          </div>
+        `;
+
+        document.getElementById('last-updated').textContent =
+          'Last updated: ' + new Date().toLocaleTimeString();
+
+      } catch (err) {
+        pill.className  = 'status-pill error';
+        pillText.textContent = 'API Unreachable';
+
+        document.getElementById('cards').innerHTML = `
+          <div class="card" style="grid-column: 1/-1; border-color: var(--red);">
+            <div class="card-label">Error</div>
+            <div class="card-value" style="color:var(--red)">${err.message}</div>
+            <p style="margin-top:8px;font-size:.8rem;color:var(--muted)">
+              Make sure the api-service is running and /api/ is proxied correctly.
+            </p>
+          </div>
+        `;
+      }
+    }
+
+    // Initial fetch + auto-refresh every 30s
+    fetchStatus();
+    setInterval(fetchStatus, 30000);
+  </script>
+</body>
+</html>

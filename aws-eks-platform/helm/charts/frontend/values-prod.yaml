@@ -1,0 +1,32 @@
+# Frontend values for prod environment
+global:
+  environment: prod
+
+replicaCount: 3
+
+ingress:
+  hosts:
+    - host: frontend.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+
+# Prod: with 3 replicas, keep at least 2 available during node drains
+# (overrides default maxUnavailable: 50% from values.yaml)
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+  maxUnavailable: null

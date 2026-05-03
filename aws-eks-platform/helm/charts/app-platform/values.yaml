@@ -1,0 +1,246 @@
+################################################################################
+# app-platform Helm Chart — Default Values
+################################################################################
+
+global:
+  environment: dev
+  imageRegistry: ""
+  imagePullSecrets: []
+
+# -- Replica count (overridden by HPA in prod)
+replicaCount: 2
+
+image:
+  repository: ""
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+################################################################################
+# Service Account with IRSA annotation
+################################################################################
+serviceAccount:
+  create: true
+  annotations: {}
+    # eks.amazonaws.com/role-arn: arn:aws:iam::123456789:role/my-service-irsa
+  automountServiceAccountToken: false
+
+################################################################################
+# Container
+################################################################################
+containerPort: 8080
+command: []
+args: []
+
+env: []
+  # - name: DATABASE_URL
+  #   valueFrom:
+  #     secretKeyRef:
+  #       name: db-secret
+  #       key: url
+
+envFrom: []
+  # - secretRef:
+  #     name: app-secrets
+
+################################################################################
+# Resources (always set in production)
+################################################################################
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+################################################################################
+# Probes
+################################################################################
+livenessProbe:
+  httpGet:
+    path: /health/live
+    port: http
+  initialDelaySeconds: 15
+  periodSeconds: 20
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health/ready
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+startupProbe:
+  httpGet:
+    path: /health/live
+    port: http
+  failureThreshold: 30
+  periodSeconds: 10
+
+################################################################################
+# Service
+################################################################################
+service:
+  enabled: true
+  type: ClusterIP
+  port: 80
+  targetPort: http
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+
+################################################################################
+# Ingress (AWS ALB)
+################################################################################
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443},{"HTTP":80}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/healthcheck-path: /health/ready
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "15"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
+    alb.ingress.kubernetes.io/load-balancer-attributes: "routing.http2.enabled=true,idle_timeout.timeout_seconds=60"
+  hosts:
+    - host: "app.example.com"
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+################################################################################
+# HPA
+################################################################################
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  # KEDA scaler (optional)
+  keda:
+    enabled: false
+
+################################################################################
+# PDB — ensure HA during rolling updates
+################################################################################
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+  # maxUnavailable: 1  # use one or the other
+
+################################################################################
+# Pod settings
+################################################################################
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+
+podLabels: {}
+
+# Security context — enforce non-root
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+################################################################################
+# Node selection
+################################################################################
+nodeSelector:
+  role: application
+
+tolerations: []
+
+# Pod anti-affinity: prefer spreading replicas across different nodes.
+# Uses the concrete chart name because values.yaml is NOT a template file —
+# Go template syntax ({{ }}) is treated as a literal string here, not evaluated.
+# The deployment.yaml template passes this block through toYaml unchanged.
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - app-platform  # concrete chart name — override per-release with nameOverride
+          topologyKey: kubernetes.io/hostname
+
+# Zone spread: ensure pods are distributed across AZs (max 1 pod skew per zone).
+# whenUnsatisfiable: DoNotSchedule means the scheduler will not place the pod
+# if it would violate the constraint — hard enforcement.
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: app-platform  # matches selectorLabels in _helpers.tpl
+
+################################################################################
+# Volumes
+################################################################################
+volumes: []
+  # - name: tmp
+  #   emptyDir: {}
+
+volumeMounts: []
+  # - name: tmp
+  #   mountPath: /tmp
+
+################################################################################
+# External Secrets Operator
+################################################################################
+externalSecrets:
+  enabled: false
+  refreshInterval: "1h"
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+  secrets: []
+    # - secretName: app-secrets
+    #   remoteRef:
+    #     key: /prod/app/secrets
+
+################################################################################
+# ServiceMonitor for Prometheus
+################################################################################
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  scrapeTimeout: 10s
+  path: /metrics
+  additionalLabels:
+    prometheus: kube-prometheus
+
+################################################################################
+# Grafana Dashboard ConfigMap
+################################################################################
+grafanaDashboard:
+  enabled: true

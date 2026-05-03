@@ -1,0 +1,146 @@
+################################################################################
+# Network Policies — Zero Trust Model
+# Default deny all, then explicitly allow required communication
+################################################################################
+
+# Default Deny All in Production
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: production
+spec:
+  podSelector: {}  # Applies to ALL pods
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# Allow DNS resolution (required for all pods)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: production
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# Allow API service to receive traffic from ALB and Prometheus
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-service-ingress
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: api-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # From ALB (AWS Load Balancer Controller uses the VPC CIDR)
+    - from:
+        - ipBlock:
+            cidr: 10.0.0.0/16  # VPC CIDR
+      ports:
+        - port: 8080
+    # From Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - port: 8080
+  egress:
+    # To database
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgresql
+      ports:
+        - port: 5432
+    # To AWS APIs (via VPC endpoints)
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.0/16
+      ports:
+        - port: 443
+---
+# Allow frontend to receive traffic from ALB
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend-ingress
+  namespace: production
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: frontend
+  policyTypes:
+    - Ingress
+  ingress:
+    # From ALB
+    - from:
+        - ipBlock:
+            cidr: 10.0.0.0/16  # VPC CIDR
+      ports:
+        - port: 80
+---
+# Allow Prometheus to scrape all namespaces
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-scraping
+  namespace: production
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - port: 8080
+        - port: 9090
+        - port: 9100
+---
+# Allow monitoring namespace to scrape everywhere
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring-egress
+  namespace: monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector: {}   # All namespaces
+      ports:
+        - port: 8080
+        - port: 9090
+        - port: 9100
+        - port: 10250
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 443

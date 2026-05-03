@@ -1,0 +1,22 @@
+# .dockerignore — frontend
+# Keeps the Docker build context to just what nginx needs.
+
+# Version control
+.git
+.gitignore
+
+# Terraform / infra (not needed by nginx)
+terraform/
+kubernetes/
+helm/
+services/
+
+# Docs
+docs/
+*.md
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

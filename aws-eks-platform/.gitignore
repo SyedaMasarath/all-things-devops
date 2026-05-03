@@ -1,0 +1,51 @@
+# Terraform
+.terraform/
+# Note: .terraform.lock.hcl IS committed (provider version lockfile — not state)
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+.terraformrc
+terraform.rc
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+crash.log
+crash.*.log
+
+# Sensitive values — NEVER commit these
+*.auto.tfvars
+terraform.tfvars
+secrets.yaml
+*-secrets.yaml
+*.pem
+*.key
+kubeconfig
+.kube/
+
+# Helm
+charts/*.tgz
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build artifacts
+dist/
+build/
+*.out
+coverage.out
+api-service        # Go compiled binary
+
+# Docker Compose local overrides
+docker-compose.override.yml
+
+# Logs
+*.log

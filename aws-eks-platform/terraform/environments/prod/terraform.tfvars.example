@@ -1,0 +1,33 @@
+################################################################################
+# Production Environment — terraform.tfvars.example
+#
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored — never commit real values.
+#
+# Usage:
+#   cp terraform.tfvars.example terraform.tfvars
+#   terraform plan -var-file=terraform.tfvars
+################################################################################
+
+# AWS region to deploy into
+# Ensure your Route53 zone, ACM certs, and existing resources match this region
+aws_region = "us-east-1"
+
+# CIDRs allowed to reach the EKS public API endpoint
+# Restrict to your VPN egress and/or office static IP(s) only.
+# Run: curl -s ifconfig.me    ← to get your current public IP
+# Run: aws vpn-connection describe-vpn-connections    ← to get VPN egress IPs
+#
+# Example:
+#   ["10.8.0.0/16"]            # corporate VPN range
+#   ["203.0.113.50/32"]        # single office static IP
+#   ["10.8.0.0/16", "203.0.113.50/32"]   # both
+allowed_cidr_blocks = ["10.8.0.0/16"]
+
+# ECR repositories to create in this environment
+# Each name maps to one aws_ecr_repository resource
+# After apply, run: terraform output ecr_repository_urls
+ecr_repositories = [
+  "api-service",
+  "frontend",
+]

@@ -1,0 +1,230 @@
+name: "Deploy"
+
+on:
+  workflow_run:
+    workflows: ["Build & Push"]
+    types:
+      - completed
+    branches:
+      - main
+
+  # Manual deploy with environment selection
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options: [dev, staging, prod]
+      image_tag:
+        description: "Docker image tag to deploy"
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+  deployments: write
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  deploy-dev:
+    name: Deploy → Dev
+    runs-on: ubuntu-latest
+    environment:
+      name: dev
+      url: https://dev.your-platform.com
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=sha-$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN_DEV }}
+          role-session-name: github-actions-deploy-dev
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: "v1.29.0"
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: "v3.14.0"
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region ${{ env.AWS_REGION }} \
+            --name eks-platform-dev
+
+      - name: Run pre-deploy validations
+        run: |
+          chmod +x scripts/validate.sh
+          ./scripts/validate.sh dev
+
+      - name: Helm Deploy — API Service
+        run: |
+          helm upgrade --install api-service helm/charts/app-platform \
+            --namespace applications \
+            --create-namespace \
+            --values helm/charts/app-platform/values.yaml \
+            --values helm/charts/app-platform/values-dev.yaml \
+            --set image.tag=${{ steps.tag.outputs.tag }} \
+            --set image.repository=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/api-service \
+            --set global.environment=dev \
+            --atomic \
+            --timeout 5m \
+            --wait
+
+      - name: Helm Deploy — Frontend
+        run: |
+          helm upgrade --install frontend helm/charts/frontend \
+            --namespace applications \
+            --values helm/charts/frontend/values.yaml \
+            --values helm/charts/frontend/values-dev.yaml \
+            --set image.tag=${{ steps.tag.outputs.tag }} \
+            --set image.repository=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/frontend \
+            --set global.environment=dev \
+            --atomic \
+            --timeout 5m \
+            --wait
+
+      - name: Run Smoke Tests
+        run: |
+          kubectl wait --for=condition=ready pod \
+            -l app.kubernetes.io/name=api-service \
+            --namespace applications \
+            --timeout=120s
+
+          # Health check
+          ENDPOINT=$(kubectl get ingress api-service -n applications -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          curl -sf "https://${ENDPOINT}/health" || exit 1
+
+  deploy-prod:
+    name: Deploy → Prod
+    runs-on: ubuntu-latest
+    environment:
+      name: prod
+      url: https://your-platform.com
+    needs: deploy-dev
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=sha-$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN_PROD }}
+          role-session-name: github-actions-deploy-prod
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: "v1.29.0"
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: "v3.14.0"
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region ${{ env.AWS_REGION }} \
+            --name eks-platform-prod
+
+      - name: Create GitHub Deployment
+        uses: chrnorm/deployment-action@v2
+        id: deployment
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          environment: production
+          ref: ${{ github.sha }}
+
+      - name: Helm Deploy — Production (Rolling Update)
+        run: |
+          # Rolling update strategy:
+          # Helm upgrades the Deployment, which triggers Kubernetes' built-in
+          # RollingUpdate — new pods are started before old ones are terminated,
+          # controlled by maxSurge/maxUnavailable in the Deployment spec.
+          # --atomic means: if any pod fails to become Ready within --timeout,
+          # Helm automatically rolls back to the previous release revision.
+          # This gives zero-downtime deploys with automatic rollback on failure.
+          helm upgrade --install api-service helm/charts/app-platform \
+            --namespace production \
+            --create-namespace \
+            --values helm/charts/app-platform/values.yaml \
+            --values helm/charts/app-platform/values-prod.yaml \
+            --set image.tag=${{ steps.tag.outputs.tag }} \
+            --set image.repository=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/api-service \
+            --set global.environment=prod \
+            --atomic \
+            --timeout 10m \
+            --wait
+
+          # Deploy frontend with same rolling update strategy
+          helm upgrade --install frontend helm/charts/frontend \
+            --namespace production \
+            --values helm/charts/frontend/values.yaml \
+            --values helm/charts/frontend/values-prod.yaml \
+            --set image.tag=${{ steps.tag.outputs.tag }} \
+            --set image.repository=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/frontend \
+            --set global.environment=prod \
+            --atomic \
+            --timeout 10m \
+            --wait
+
+      - name: Update Deployment Status (Success)
+        if: success()
+        uses: chrnorm/deployment-status@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          deployment-id: ${{ steps.deployment.outputs.deployment_id }}
+          state: success
+          environment-url: https://your-platform.com
+
+      - name: Update Deployment Status (Failure) + Rollback
+        if: failure()
+        run: |
+          helm rollback api-service --namespace production --wait
+          echo "Rollback triggered due to deployment failure"
+
+      - name: Notify Slack
+        if: always()
+        uses: slackapi/slack-github-action@v1
+        with:
+          channel-id: ${{ secrets.SLACK_DEPLOY_CHANNEL_ID }}
+          slack-message: |
+            ${{ job.status == 'success' && '✅' || '❌' }} Production Deploy ${{ job.status }}
+            Image: `${{ steps.tag.outputs.tag }}`
+            Actor: ${{ github.actor }}
+            Commit: ${{ github.sha }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}

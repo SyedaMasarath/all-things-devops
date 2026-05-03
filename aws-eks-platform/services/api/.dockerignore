@@ -1,0 +1,37 @@
+# .dockerignore — api-service
+# Prevents unnecessary files from being sent to the Docker build context.
+# Smaller context = faster builds.
+
+# Version control
+.git
+.gitignore
+
+# Terraform (not needed to build the Go binary)
+terraform/
+*.tf
+*.tfstate
+*.tfvars
+
+# Kubernetes / Helm
+kubernetes/
+helm/
+
+# Docs
+docs/
+*.md
+
+# Other services
+frontend/
+
+# Go build artifacts
+*.out
+coverage.out
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
