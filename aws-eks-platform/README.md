@@ -4,8 +4,8 @@ A production-grade, cloud-native platform built on AWS EKS. This project demonst
 
 > **Quick start (no AWS required):**
 > ```bash
-> git clone https://github.com/your-org/aws-eks-platform
-> cd aws-eks-platform
+> git clone https://github.com/SyedaMasarath/all-things-devops.git
+> cd all-things-devops/aws-eks-platform
 > docker compose up --build
 > # Frontend → http://localhost:3000  |  API → http://localhost:8080
 > ```
