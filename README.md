@@ -1,6 +1,6 @@
 # All Things DevOps
 
-> A living collection of production-grade DevOps projects, reference architectures, and hard-won learnings from working as a Senior DevOps / Platform Engineer.
+> A living collection of production-grade DevOps projects, reference architectures, and hard-won learnings from working as a Senior DevOps Engineer.
 
 This repository is not tutorials. Everything here reflects real decisions made in real environments — including the tradeoffs, the "why not X", and the operational realities that don't make it into blog posts.
 
