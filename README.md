@@ -60,6 +60,40 @@ docker compose up --build
 
 ---
 
+### 🧩 [terraform-modules](https://github.com/SyedaMasarath/terraform-modules) — Reusable AWS Terraform Modules
+
+> *Production-grade, multi-region / multi-environment Terraform module library — built AI-first with Claude Code.*
+
+Eight opinionated modules covering a three-tier AWS architecture, structured so each environment is an independent root module with its own remote state. Pairs a built-in Terraform skill with a [`CLAUDE.md`](https://github.com/SyedaMasarath/terraform-modules/blob/main/CLAUDE.md) for project-specific conventions — the pattern that keeps every session consistent without re-explaining context.
+
+**What's inside:**
+
+| Module | What it provisions |
+|---|---|
+| **vpc** | Multi-AZ VPC, public/private subnets, NAT gateways, flow logs |
+| **eks** | EKS cluster, managed node groups (SPOT/ON_DEMAND), OIDC/IRSA, KMS |
+| **rds** | Aurora PostgreSQL, Secrets Manager with rotation, KMS encryption |
+| **alb** | Application Load Balancer, HTTPS listeners, access logs |
+| **waf** | WAFv2 Web ACL, managed rule groups, rate limiting, IP allow/deny lists |
+| **ecr** | ECR repositories, immutable tags, lifecycle policies, cross-account pull |
+| **s3** | Buckets with versioning, SSE, lifecycle rules |
+| **autoscaling** | EC2 Auto Scaling Group with launch template |
+
+**Infrastructure layout:**
+
+```
+modules/          ← reusable building blocks (no provider config)
+resources/
+  us-east-1/staging     ← 10.1.0.0/16 — SPOT nodes, 1 NAT
+  us-east-1/production  ← 10.2.0.0/16 — ON_DEMAND, 3 NAT, deletion protection
+  eu-west-1/staging     ← 10.11.0.0/16
+  eu-west-1/production  ← 10.12.0.0/16
+```
+
+→ **[Repository and full documentation](https://github.com/SyedaMasarath/terraform-modules)**
+
+---
+
 ### 📌 Coming Soon
 
 Projects I'm actively working on or planning to add:
@@ -69,7 +103,6 @@ Projects I'm actively working on or planning to add:
 | `platform-tooling` | Internal CLI tooling for developer self-service (Go) | Planning |
 | `observability-stack` | Standalone Prometheus + Grafana + Loki setup with runbooks and alert library | Planning |
 | `gitops-argocd` | ArgoCD-based GitOps deployment with progressive delivery (canary + blue-green) | Planning |
-| `terraform-modules` | Reusable, versioned Terraform modules for common AWS patterns | Planning |
 | `incident-runbooks` | Real-world runbooks for common production incidents | In progress |
 
 ---
@@ -102,6 +135,9 @@ all-things-devops/
 ├── aws-eks-platform/    # Production EKS reference architecture (Terraform + Helm + GitHub Actions)
 ├── knowledge-base/      # Notes, patterns, and lessons learned
 └── README.md            # This file
+
+# Standalone repos (linked, not nested — each has its own CI and README)
+terraform-modules/       # https://github.com/SyedaMasarath/terraform-modules
 ```
 
 ---
